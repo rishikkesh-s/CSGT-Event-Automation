@@ -13,7 +13,7 @@ from dotenv import load_dotenv  # Add this to handle the hidden key
 os.environ["GOOGLE_API_USE_MTLS_ENDPOINT"] = "never" 
 
 load_dotenv()  # This pulls the key from your secret .env file
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -48,7 +48,8 @@ col1, col2 = st.columns([1, 1])
 
 with col1:
     uploaded_file = st.file_uploader("Upload Poster (JPG/PNG)", type=["jpg", "png", "jpeg"])
-    insta_link = st.text_input("Paste Social Media Link (Optional)")
+    # CHANGE 1: Renamed from Social Media Link to Paste Raw Text
+    raw_text_input = st.text_area("Paste Raw Text (Optional)", placeholder="Paste caption or extra details here...")
     process_btn = st.button("🚀 Extract Row")
 
 
@@ -66,9 +67,9 @@ if process_btn and uploaded_file:
         - Staff (Convenor/Co_Convenor/Coordinators): MUST include names AND titles (e.g., 'Dr. Name, AP/CS&GT').
         - Chief_Guest: Name ONLY.
         - Designation_Details: ONLY the Chief Guest's company/role.
-        - Instagram_Link: Extract the URL only.
+        - Instagram_Link: Extract the Instagram/Social Media URL only. DO NOT include meeting links.
 
-        Context: {ocr_result} {insta_link}
+        Context: {ocr_result} {raw_text_input}
         
         JSON Keys: Date, Venue, Time, Event_Type, Topic, Convenor, Co_Convenor, Event_Coordinators, Student_Coordinators, Chief_Guest, Designation_Details, Instagram_Link.
         """
@@ -85,8 +86,12 @@ if process_btn and uploaded_file:
                 "Designation & Company details", "Instagram Link"
             ]
             
-            raw_link = data.get("Instagram_Link", insta_link)
-            clean_link = raw_link.split(" ")[0] if raw_link else "-"
+            # CHANGE 2: Logic to ensure ONLY Instagram/Social links are accepted, filtering out Meet/Zoom
+            raw_link = data.get("Instagram_Link", "")
+            if any(x in raw_link.lower() for x in ["instagram.com", "facebook.com", "linkedin.com", "t.me"]):
+                clean_link = raw_link.split(" ")[0]
+            else:
+                clean_link = "-"
             
             # --- THE FIX: Using 'CS&GT' safely for HTML ---
             row_data = [
@@ -103,13 +108,12 @@ if process_btn and uploaded_file:
                 clean_val(data.get("Student_Coordinators")),
                 clean_val(data.get("Chief_Guest")),
                 clean_val(data.get("Designation_Details")),
-                clean_val(clean_link if "http" in clean_link.lower() or "instagr" in clean_link.lower() else "-")
+                clean_val(clean_link)
             ]
             
             st.success("✅ Fixed! All 14 boxes are separated.")
 
             # --- THE GRID (Ensuring & doesn't break the boxes) ---
-            # We replace '&' with '&amp;' inside the table to keep the boxes from merging
             safe_row_data = [str(val).replace("&", "&amp;") for val in row_data]
 
             html_grid = f"""
