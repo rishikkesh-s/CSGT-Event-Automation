@@ -9,7 +9,6 @@ import os
 from dotenv import load_dotenv  # Add this to handle the hidden key
 
 # --- 1. SETUP GEMINI (SECURE) ---
-# Forced environment fix to stop the 404 Beta error
 os.environ["GOOGLE_API_USE_MTLS_ENDPOINT"] = "never" 
 
 load_dotenv()  # This pulls the key from your secret .env file
@@ -29,13 +28,11 @@ def clean_val(val):
     if not val or str(val).lower() in ["none", "n/a", "null", "[]"]:
         return "-"
     
-    # If AI returns a list or dict, turn it into a string
     if isinstance(val, list):
         val = ", ".join([str(i) for i in val])
     if isinstance(val, dict):
         val = ", ".join([f"{k}: {v}" for k, v in val.items()])
         
-    # Remove bold stars and brackets
     clean = str(val).replace("*", "").replace("[", "").replace("]", "").replace("'", "").replace('"', "")
     return clean.strip()
 
@@ -48,7 +45,7 @@ col1, col2 = st.columns([1, 1])
 
 with col1:
     uploaded_file = st.file_uploader("Upload Poster (JPG/PNG)", type=["jpg", "png", "jpeg"])
-    # CHANGE 1: Renamed from Social Media Link to Paste Raw Text
+    # CHANGE: Paste Raw Text instead of Social Link
     raw_text_input = st.text_area("Paste Raw Text (Optional)", placeholder="Paste caption or extra details here...")
     process_btn = st.button("🚀 Extract Row")
 
@@ -67,7 +64,7 @@ if process_btn and uploaded_file:
         - Staff (Convenor/Co_Convenor/Coordinators): MUST include names AND titles (e.g., 'Dr. Name, AP/CS&GT').
         - Chief_Guest: Name ONLY.
         - Designation_Details: ONLY the Chief Guest's company/role.
-        - Instagram_Link: Extract the Instagram/Social Media URL only. DO NOT include meeting links.
+        - Instagram_Link: Extract the Social Media URL only. EXCLUDE meeting links (meet/zoom).
 
         Context: {ocr_result} {raw_text_input}
         
@@ -86,14 +83,13 @@ if process_btn and uploaded_file:
                 "Designation & Company details", "Instagram Link"
             ]
             
-            # CHANGE 2: Logic to ensure ONLY Instagram/Social links are accepted, filtering out Meet/Zoom
+            # --- FIX FOR NONETYPE ERROR ---
             raw_link = data.get("Instagram_Link", "")
-            if any(x in raw_link.lower() for x in ["instagram.com", "facebook.com", "linkedin.com", "t.me"]):
-                clean_link = raw_link.split(" ")[0]
-            else:
-                clean_link = "-"
+            clean_link = "-"
+            if raw_link: # Only run lower() if raw_link is NOT None
+                if any(x in str(raw_link).lower() for x in ["instagram.com", "facebook.com", "linkedin.com", "t.me"]):
+                    clean_link = str(raw_link).split(" ")[0]
             
-            # --- THE FIX: Using 'CS&GT' safely for HTML ---
             row_data = [
                 "1", 
                 "CS&GT", 
@@ -111,9 +107,8 @@ if process_btn and uploaded_file:
                 clean_val(clean_link)
             ]
             
-            st.success("✅ Fixed! All 14 boxes are separated.")
+            st.success("✅ Extraction Successful!")
 
-            # --- THE GRID (Ensuring & doesn't break the boxes) ---
             safe_row_data = [str(val).replace("&", "&amp;") for val in row_data]
 
             html_grid = f"""
@@ -131,12 +126,6 @@ if process_btn and uploaded_file:
             
             st.markdown(html_grid, unsafe_allow_html=True)
             st.caption("Drag mouse across the boxes above and press Ctrl+C.")
-
-            st.divider()
-
-            with st.expander("🔍 View Details as List"):
-                for h, v in zip(headers, row_data):
-                    st.write(f"**{h}:** {v}")
             
         except Exception as e:
             st.error(f"Error: {e}")
