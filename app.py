@@ -51,11 +51,17 @@ with col1:
 
 
 # --- 4. PROCESSING ---
-if process_btn and uploaded_file:
-    with st.spinner("🧠 AI is analyzing the poster..."):
-        img = Image.open(uploaded_file)
-        reader = easyocr.Reader(['en'])
-        ocr_result = " ".join(reader.readtext(np.array(img), detail=0))
+# Updated logic: Run if button is clicked AND (file is present OR text is present)
+if process_btn and (uploaded_file or raw_text_input):
+    with st.spinner("🧠 AI is analyzing the input..."):
+        
+        # Only run OCR if a file was actually uploaded
+        if uploaded_file:
+            img = Image.open(uploaded_file)
+            reader = easyocr.Reader(['en'])
+            ocr_result = " ".join(reader.readtext(np.array(img), detail=0))
+        else:
+            ocr_result = "" # No image, just use the pasted text
         
         prompt = f"""
         Extract details from this text into a SINGLE-LEVEL JSON object.
@@ -86,7 +92,7 @@ if process_btn and uploaded_file:
             # --- FIX FOR NONETYPE ERROR ---
             raw_link = data.get("Instagram_Link", "")
             clean_link = "-"
-            if raw_link: # Only run lower() if raw_link is NOT None
+            if raw_link: 
                 if any(x in str(raw_link).lower() for x in ["instagram.com", "facebook.com", "linkedin.com", "t.me"]):
                     clean_link = str(raw_link).split(" ")[0]
             
@@ -129,8 +135,3 @@ if process_btn and uploaded_file:
             
         except Exception as e:
             st.error(f"Error: {e}")
-
-with col2:
-    if uploaded_file:
-        st.subheader("🖼️ Poster Preview")
-        st.image(uploaded_file, use_container_width=True)
